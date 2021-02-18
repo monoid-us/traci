@@ -1,0 +1,5 @@
+{:paths ["src" "dev"]
+ :deps {org.clojure/tools.trace {:mvn/version "0.7.10"}}
+ :aliases {:dev {:extra-paths ["dev" "test"]
+                 :extra-deps {vlaaad/reveal {:mvn/version "1.2.185"}
+                              kotyo/clj-rocksdb {:mvn/version "0.1.6"}}}}}
