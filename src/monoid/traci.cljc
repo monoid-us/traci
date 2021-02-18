@@ -1,7 +1,8 @@
 (ns monoid.traci
   (:require [monoid.traci.api :as api]
             [monoid.traci.in-memory :as in-memory]
-            [clojure.tools.trace :as trace])                ;; TODO remove this
+            [clojure.pprint :as pprint]
+            )
   (:import  [java.time Instant]))
 
 (def ^{:dynamic true} *trace* {:depth 0})
@@ -49,33 +50,39 @@
       (.contains arglist '&) (arglist-for-varargs arglist args)
       true                   (arglist-regular-fn arglist args))))
 
-(defn default-trace-producer [trace-id name metadata parent-id parent-name f args result start-time-ms duration-ns opts]
-  #:traci{:id        trace-id
-          :name      name
-          :args      (arglist-for-args metadata args)
-          :result    result                                    ;; TODO - shorten result
-          :start     (java.time.Instant/ofEpochMilli start-time-ms)
-          :duration-ns  duration-ns
-          :version   (:version opts :current)
-          :caller    parent-name
-          :caller-id parent-id}
-  )
+(defn default-trace-producer [trace-id name metadata parent-id parent-name f args result exception start-time-ms duration-ns opts]
+  (cond-> #:traci{:id          trace-id
+                  :name        name
+                  :args        (arglist-for-args metadata args)
+                  :result      result                       ;; TODO - shorten result
+                  :start       (java.time.Instant/ofEpochMilli start-time-ms)
+                  :duration-ns duration-ns
+                  :version     (:version opts :current)
+                  :caller      parent-name
+                  :caller-id   parent-id}
+          exception (assoc :traci/exception exception)
+          ))
 
 (defn- tracing-fn [name metadata f args trace-producer trace-store opts]
   (let [{:keys [parent-id depth parent-name]} *trace*
         trace-id  (str (if parent-id (str parent-id ".") "") (gensym (:name metadata)) "." depth)
         start-time-ms (System/currentTimeMillis)
         start-time-ns (System/nanoTime)
-        result    (binding [*trace* (-> *trace*
-                                        (update :depth inc)
-                                        (assoc :parent-id trace-id)
-                                        (assoc :parent-name name))]
-                   (apply f args))
-        duration-ns (- (System/nanoTime) start-time-ns)
-        ]
+        [result exception] (binding [*trace* (-> *trace*
+                                                 (update :depth inc)
+                                                 (assoc :parent-id trace-id)
+                                                 (assoc :parent-name name))]
+                             (try [(apply f args) nil]
+                                  (catch Exception e
+                                    [nil e])))
+        duration-ns (- (System/nanoTime) start-time-ns)]
     (api/store! trace-store
-                (trace-producer trace-id name metadata parent-id parent-name f args result start-time-ms duration-ns opts) opts)
-    result))
+                (trace-producer trace-id name metadata parent-id parent-name
+                                f args result exception start-time-ms duration-ns opts) opts)
+    ;; re-throw exception
+    (if exception
+      (throw exception)
+      result)))
 
 (defn trace-var
   "Trace a var, which must deref to something implementing fn"
@@ -131,5 +138,6 @@
       (doseq [f (fns ns)]
         (untrace-var f)))))
 
-
-
+(defn prettify-trace [{:traci/keys [name args result exception]}]
+  (str "(" name " " (with-out-str (pprint/pprint args)) ") \n=>" (with-out-str (pprint/pprint result))
+       (when exception (with-out-str (pprint/pprint exception)))))

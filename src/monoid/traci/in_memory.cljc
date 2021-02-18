@@ -1,6 +1,7 @@
 (ns monoid.traci.in-memory
   "In-memory trace capture. Uses an agent to store all traces, keyed by ns/fn"
-  (:require [monoid.traci.api :as api]))
+  (:require [monoid.traci.api :as api]
+            ))
 
 (def store (agent {}))
 
@@ -89,3 +90,18 @@
          (sort-by :traci/start #(compare %2 %1))
          first
          )))
+
+(defn all-traces []
+  (->> (tree-seq (fn [n]
+                   (not (:traci/id n)))
+                 (fn [n] (vals n))
+                 @store)
+       (filter :traci/id)))
+
+(defn callees [var-or-symbol]
+  (let [trace (last-call-to var-or-symbol)
+        {:traci/keys [id version]} trace]
+    (->> (all-traces)
+         (filter #(and (= (:traci/caller-id %) id)
+                       (= (:traci/version %) version)
+                       )))))

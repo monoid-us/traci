@@ -64,6 +64,10 @@
     (force-sensitivity (ep4))
     ))
 
+(defn throw-up []
+  (ep4)
+  (throw (Exception. "Need to throw")))
+
 (comment
   (let [han (person "Han" "Solo")
         luke (person "Luke" "Skywalker")
