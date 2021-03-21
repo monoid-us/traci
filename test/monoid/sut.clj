@@ -55,14 +55,13 @@
   (ep4)
   (ep4)
   (ep4)
-  (traci/query-store [:get #'monoid.sut/ep4 :current] {})
+  (in-memory/calls-to #'ep4)
   )
 
 (defn run-times [n]
   (reset-all {::in-memory/max-traces-per-version 5})
   (dotimes [c n]
-    (force-sensitivity (ep4))
-    ))
+    (force-sensitivity (ep4))))
 
 (defn throw-up []
   (ep4)
@@ -76,6 +75,5 @@
         (befriend luke))))
 
 (comment
-  (traci/query-store [:get #'monoid.sut/befriend :current :caller] {})
   (def m (in-memory/last-call-to #'person))
   )

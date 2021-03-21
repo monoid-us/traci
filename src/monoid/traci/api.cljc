@@ -3,5 +3,4 @@
   )
 
 (defprotocol TraceStore
-  (store! [this trace options])
-  (query [this q options]))
+  (store! [this trace options]))

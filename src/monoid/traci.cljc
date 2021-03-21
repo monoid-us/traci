@@ -50,7 +50,7 @@
       (.contains arglist '&) (arglist-for-varargs arglist args)
       true                   (arglist-regular-fn arglist args))))
 
-(defn default-trace-producer [trace-id name metadata parent-id parent-name f args result exception start-time-ms duration-ns opts]
+(defn default-trace-producer [trace-id name metadata caller-id caller-name f args result exception start-time-ms duration-ns opts]
   (cond-> #:traci{:id          trace-id
                   :name        name
                   :args        (arglist-for-args metadata args)
@@ -58,26 +58,26 @@
                   :start       (java.time.Instant/ofEpochMilli start-time-ms)
                   :duration-ns duration-ns
                   :version     (:version opts :current)
-                  :caller      parent-name
-                  :caller-id   parent-id}
+                  :caller      caller-name
+                  :caller-id   caller-id}
           exception (assoc :traci/exception exception)
           ))
 
 (defn- tracing-fn [name metadata f args trace-producer trace-store opts]
-  (let [{:keys [parent-id depth parent-name]} *trace*
-        trace-id  (str (if parent-id (str parent-id ".") "") (gensym (:name metadata)) "." depth)
+  (let [{:keys [caller-id depth caller-name]} *trace*
+        trace-id  (str (if caller-id (str caller-id ".") "") (gensym (:name metadata)) "." depth)
         start-time-ms (System/currentTimeMillis)
         start-time-ns (System/nanoTime)
         [result exception] (binding [*trace* (-> *trace*
                                                  (update :depth inc)
-                                                 (assoc :parent-id trace-id)
-                                                 (assoc :parent-name name))]
-                             (try [(apply f args) nil]
+                                                 (assoc :caller-id trace-id)
+                                                 (assoc :caller-name name))]
+                             (try [(apply f args) nil]      ;; call original f
                                   (catch Exception e
                                     [nil e])))
         duration-ns (- (System/nanoTime) start-time-ns)]
     (api/store! trace-store
-                (trace-producer trace-id name metadata parent-id parent-name
+                (trace-producer trace-id name metadata caller-id caller-name
                                 f args result exception start-time-ms duration-ns opts) opts)
     ;; re-throw exception
     (if exception
@@ -109,15 +109,6 @@
     (when f
       (alter-meta! var dissoc ::tracied)
       (alter-var-root var (constantly f)))))
-
-(defn query-store
-  "Query the store configured in `opts`. Query language is store-implementation dependent.
-  If no :trace-store is set, use monoid.traci.in-memory store"
-  ([q]
-   (query-store q {}))
-  ([q opts]
-   (let [trace-store (:trace-store opts in-memory/in-memory-store)]
-     (api/query trace-store q opts))))
 
 (defn trace-ns
   "Add tracing to all fns of a namespace.
